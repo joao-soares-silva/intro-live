@@ -70,7 +70,7 @@ export const StudioControls: React.FC<StudioControlsProps> = ({
   const [activeTab, setActiveTab] = useState<'theme' | 'background' | 'text' | 'effects' | 'export'>('background');
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [copiedObsUrl, setCopiedObsUrl] = useState(false);
-  const [exportDuration, setExportDuration] = useState<number>(5);
+  const [exportDuration, setExportDuration] = useState<number>(60);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleToggleSound = () => {
@@ -811,44 +811,50 @@ export const StudioControls: React.FC<StudioControlsProps> = ({
             {/* TAB: EXPORTAR */}
             {activeTab === 'export' && (
               <div className="flex flex-wrap items-center gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/80">
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-xs text-slate-400">Duração:</span>
-                  {[3, 5, 8].map((sec) => (
+                  {[
+                    { label: '10s', sec: 10 },
+                    { label: '30s', sec: 30 },
+                    { label: '1 min', sec: 60 },
+                    { label: '3 min', sec: 180 },
+                    { label: '5 min', sec: 300 },
+                  ].map((item) => (
                     <button
-                      key={sec}
-                      onClick={() => setExportDuration(sec)}
-                      className={`px-2 py-1 text-xs font-mono rounded ${
-                        exportDuration === sec
-                          ? 'bg-slate-700 text-white font-bold'
-                          : 'bg-slate-900 text-slate-400 hover:text-white'
+                      key={item.sec}
+                      onClick={() => setExportDuration(item.sec)}
+                      className={`px-2.5 py-1 text-xs font-mono rounded transition-colors ${
+                        exportDuration === item.sec
+                          ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                          : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
                       }`}
                     >
-                      {sec}s
+                      {item.label}
                     </button>
                   ))}
                 </div>
+
+                {/* Export MP4 Video button */}
+                <button
+                  onClick={() => onExportVideo(exportDuration)}
+                  disabled={isExportingGif || isExportingVideo}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-bold text-xs transition-colors shadow-lg active:scale-95"
+                >
+                  <Video className="w-3.5 h-3.5" />
+                  <span>
+                    {isExportingVideo ? `Gerando MP4 (${exportProgress}%)...` : 'Baixar Vídeo MP4 (HD 60fps)'}
+                  </span>
+                </button>
 
                 {/* Export GIF button */}
                 <button
                   onClick={() => onExportGif(exportDuration)}
                   disabled={isExportingGif || isExportingVideo}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-black font-bold text-xs transition-colors shadow-md"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-medium text-xs transition-colors border border-slate-700"
                 >
-                  <ImageIcon className="w-3.5 h-3.5" />
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
                   <span>
                     {isExportingGif ? `Gerando GIF (${exportProgress}%)...` : 'Baixar GIF Animado'}
-                  </span>
-                </button>
-
-                {/* Export Video button */}
-                <button
-                  onClick={() => onExportVideo(exportDuration)}
-                  disabled={isExportingGif || isExportingVideo}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-black font-bold text-xs transition-colors shadow-md"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                  <span>
-                    {isExportingVideo ? `Gravando Vídeo 60fps...` : 'Gravar Vídeo WebM (HD)'}
                   </span>
                 </button>
 

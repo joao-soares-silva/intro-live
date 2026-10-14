@@ -6,6 +6,7 @@ interface GitNeonCanvasProps {
   theme: NeonTheme;
   settings: StreamOverlaySettings;
   introProgress: number; // 0 to 1
+  remainingSeconds: number;
   isRecording?: boolean;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 }
@@ -64,6 +65,7 @@ export const GitNeonCanvas: React.FC<GitNeonCanvasProps> = ({
   theme,
   settings,
   introProgress,
+  remainingSeconds,
   onCanvasReady,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -688,7 +690,245 @@ export const GitNeonCanvas: React.FC<GitNeonCanvasProps> = ({
       ctx.restore(); // Restore Camera Transform
       }
 
-      // 9. Subtle Scanlines Overlay
+      // 9. OVERLAY TYPOGRAPHY, COUNTDOWN & ACTIVE SOCIALS DIRECTLY ON MASTER CANVAS
+      const revealAlpha = Math.min(1, Math.max(0, (introProgress - 0.2) / 0.4));
+      ctx.save();
+      ctx.globalAlpha = revealAlpha;
+
+      // Top bar (y = 65)
+      const isLiveNow = (remainingSeconds ?? 0) <= 0 && settings.showCountdown;
+      const liveText = isLiveNow ? 'TRANSMISSÃO AO VIVO' : 'TRANSMISSÃO EM BREVE';
+
+      // Blinking neon dot
+      const dotPulse = (Math.sin(now * 5) + 1) * 0.5;
+      ctx.save();
+      ctx.fillStyle = theme.primary;
+      ctx.shadowColor = theme.primary;
+      ctx.shadowBlur = 10 * dotPulse;
+      ctx.beginPath();
+      ctx.arc(60, 65, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Top live text
+      ctx.font = '700 16px "JetBrains Mono", monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = theme.primary;
+      ctx.shadowColor = theme.primary;
+      ctx.shadowBlur = 10;
+      ctx.fillText(liveText, 76, 65);
+      ctx.restore();
+
+      // Top Right: Countdown badge
+      if (settings.showCountdown) {
+        const totalSec = Math.max(0, remainingSeconds ?? 0);
+        const mins = Math.floor(totalSec / 60);
+        const secs = totalSec % 60;
+        const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+        ctx.save();
+        const badgeW = 200;
+        const badgeH = 40;
+        const badgeX = width - 60 - badgeW;
+        const badgeY = 45;
+
+        ctx.fillStyle = 'rgba(2, 6, 12, 0.7)';
+        ctx.strokeStyle = `${theme.primary}55`;
+        ctx.lineWidth = 1.5;
+        roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '600 13px "JetBrains Mono", monospace';
+        ctx.fillStyle = '#94a3b8';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('INÍCIO EM:', badgeX + 16, badgeY + badgeH * 0.5);
+
+        ctx.font = '700 18px "JetBrains Mono", monospace';
+        ctx.fillStyle = theme.accent;
+        ctx.shadowColor = theme.primary;
+        ctx.shadowBlur = 10;
+        ctx.textAlign = 'right';
+        ctx.fillText(timeStr, badgeX + badgeW - 16, badgeY + badgeH * 0.5);
+        ctx.restore();
+      }
+
+      // Center / Lower Area: Channel Name, Stream Title, Tagline
+      const baseTextY = settings.showGitLogo ? 740 : 660;
+
+      // Channel Name
+      if (settings.channelName && settings.channelName.trim() !== '') {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        if (settings.showBoxContainer) {
+          ctx.font = '900 52px "JetBrains Mono", monospace';
+          const textW = ctx.measureText(settings.channelName).width;
+          const boxW = textW + 100;
+          const boxH = 80;
+          const boxX = (width - boxW) * 0.5;
+          const boxY = baseTextY - boxH * 0.5;
+
+          ctx.fillStyle = 'rgba(2, 6, 12, 0.8)';
+          ctx.strokeStyle = theme.primary;
+          ctx.shadowColor = theme.primary;
+          ctx.shadowBlur = 20;
+          ctx.lineWidth = 2.5;
+          roundRect(ctx, boxX, boxY, boxW, boxH, 12);
+          ctx.fill();
+          ctx.stroke();
+
+          // Corner brackets
+          const cw = 12;
+          ctx.strokeStyle = theme.accent;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(boxX, boxY + cw);
+          ctx.lineTo(boxX, boxY);
+          ctx.lineTo(boxX + cw, boxY);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(boxX + boxW - cw, boxY);
+          ctx.lineTo(boxX + boxW, boxY);
+          ctx.lineTo(boxX + boxW, boxY + cw);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(boxX, boxY + boxH - cw);
+          ctx.lineTo(boxX, boxY + boxH);
+          ctx.lineTo(boxX + cw, boxY + boxH);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(boxX + boxW - cw, boxY + boxH);
+          ctx.lineTo(boxX + boxW, boxY + boxH);
+          ctx.lineTo(boxX + boxW, boxY + boxH - cw);
+          ctx.stroke();
+
+          ctx.fillStyle = theme.accent;
+          ctx.shadowColor = theme.primary;
+          ctx.shadowBlur = 25;
+          ctx.fillText(settings.channelName, width * 0.5, baseTextY);
+        } else {
+          ctx.font = '900 64px "Outfit", sans-serif';
+          ctx.fillStyle = theme.accent;
+          ctx.shadowColor = theme.primary;
+          ctx.shadowBlur = 35;
+          ctx.fillText(settings.channelName, width * 0.5, baseTextY);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowBlur = 8;
+          ctx.fillText(settings.channelName, width * 0.5, baseTextY);
+        }
+        ctx.restore();
+      }
+
+      // Stream Title (e.g. "A LIVE VAI COMEÇAR")
+      if (settings.streamTitle) {
+        ctx.save();
+        const titleY = baseTextY + 70;
+        ctx.font = '800 28px "Outfit", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = theme.secondary;
+        ctx.shadowBlur = 20;
+
+        const displayTitle = isLiveNow ? 'ESTAMOS AO VIVO!' : settings.streamTitle;
+        ctx.fillText(displayTitle, width * 0.5, titleY);
+
+        const titleWidth = ctx.measureText(displayTitle).width;
+        const lineLen = 80;
+        ctx.strokeStyle = theme.secondary;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = theme.secondary;
+        ctx.shadowBlur = 10;
+
+        ctx.beginPath();
+        ctx.moveTo(width * 0.5 - titleWidth * 0.5 - 24 - lineLen, titleY);
+        ctx.lineTo(width * 0.5 - titleWidth * 0.5 - 24, titleY);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(width * 0.5 + titleWidth * 0.5 + 24, titleY);
+        ctx.lineTo(width * 0.5 + titleWidth * 0.5 + 24 + lineLen, titleY);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Tagline (e.g. "PREPARE-SE!")
+      if (settings.tagline) {
+        ctx.save();
+        const tagY = baseTextY + 120;
+        ctx.font = '700 16px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = theme.primary;
+        ctx.shadowColor = theme.primary;
+        ctx.shadowBlur = 14;
+        ctx.fillText(settings.tagline, width * 0.5, tagY);
+        ctx.restore();
+      }
+
+      // Bottom bar: Active Social Handles
+      const activeSocials = (settings.socialsList || []).filter(
+        (s) => s.enabled && Boolean(s.handle?.trim())
+      );
+      if (activeSocials.length > 0) {
+        ctx.save();
+        ctx.font = '600 14px "JetBrains Mono", monospace';
+        const socialY = height - 55;
+
+        let totalWidth = 0;
+        const itemWidths: number[] = [];
+        for (const soc of activeSocials) {
+          const str = `/${soc.label}${soc.handle}`;
+          const w = ctx.measureText(str).width + 36;
+          itemWidths.push(w);
+          totalWidth += w + 20;
+        }
+        totalWidth -= 20;
+
+        let curX = (width - totalWidth) * 0.5;
+        for (let idx = 0; idx < activeSocials.length; idx++) {
+          const soc = activeSocials[idx];
+          const w = itemWidths[idx];
+          const h = 34;
+
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+          ctx.lineWidth = 1;
+          roundRect(ctx, curX, socialY - h * 0.5, w, h, 6);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = theme.primary;
+          ctx.fillText('/', curX + 12, socialY);
+
+          const slashW = ctx.measureText('/').width;
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillText(soc.label, curX + 12 + slashW, socialY);
+
+          const labelW = ctx.measureText(soc.label).width;
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = theme.primary;
+          ctx.shadowBlur = 8;
+          ctx.fillText(soc.handle, curX + 12 + slashW + labelW, socialY);
+          ctx.shadowBlur = 0;
+
+          curX += w + 20;
+        }
+        ctx.restore();
+      }
+
+      ctx.restore(); // Restore revealAlpha
+
+      // 10. Subtle Scanlines Overlay
       if (settings.showScanlines) {
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
@@ -698,19 +938,21 @@ export const GitNeonCanvas: React.FC<GitNeonCanvasProps> = ({
         ctx.restore();
       }
 
-      // 10. Subtle Vignette
-      const vigGrad = ctx.createRadialGradient(
-        width * 0.5,
-        height * 0.5,
-        Math.min(width, height) * 0.45,
-        width * 0.5,
-        height * 0.5,
-        Math.max(width, height) * 0.72
-      );
-      vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      vigGrad.addColorStop(1, 'rgba(0, 0, 0, 0.8)');
-      ctx.fillStyle = vigGrad;
-      ctx.fillRect(0, 0, width, height);
+      // 11. Subtle Vignette
+      if (!bgImageElementRef.current || settings.bgImageOpacity < 0.8) {
+        const vigGrad = ctx.createRadialGradient(
+          width * 0.5,
+          height * 0.5,
+          Math.min(width, height) * 0.45,
+          width * 0.5,
+          height * 0.5,
+          Math.max(width, height) * 0.72
+        );
+        vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vigGrad.addColorStop(1, 'rgba(0, 0, 0, 0.8)');
+        ctx.fillStyle = vigGrad;
+        ctx.fillRect(0, 0, width, height);
+      }
 
       animFrameRef.current = requestAnimationFrame(render);
     };
@@ -722,7 +964,7 @@ export const GitNeonCanvas: React.FC<GitNeonCanvasProps> = ({
         cancelAnimationFrame(animFrameRef.current);
       }
     };
-  }, [theme, settings, introProgress]);
+  }, [theme, settings, introProgress, remainingSeconds]);
 
   return (
     <canvas

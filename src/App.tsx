@@ -9,6 +9,7 @@ import { StreamOverlayUI } from './components/StreamOverlayUI';
 import { StudioControls } from './components/StudioControls';
 import { DEFAULT_SETTINGS, NEON_THEMES, StreamOverlaySettings } from './types/theme';
 import { createGifBlob } from './utils/gifEncoder';
+import { exportCanvasToMp4 } from './utils/mp4Exporter';
 import { cyberAudio } from './utils/audioSynth';
 import { HelpCircle, X, ExternalLink, Sparkles, CheckCircle2 } from 'lucide-react';
 
@@ -32,6 +33,7 @@ export default function App() {
 
   // Canvas Reference
   const canvasElementRef = useRef<HTMLCanvasElement | null>(null);
+  const stopRecordingRef = useRef<(() => void) | null>(null);
 
   // Intro Animation Clock
   const introStartTimeRef = useRef<number>(performance.now());
@@ -131,7 +133,7 @@ export default function App() {
     setCountdownActive(true);
   };
 
-  // Video Export (60 FPS WebM HD)
+  // Video Export (60 FPS MP4 HD)
   const handleExportVideo = async (durationSec: number) => {
     const canvas = canvasElementRef.current;
     if (!canvas || isExportingVideo || isExportingGif) return;
@@ -139,56 +141,39 @@ export default function App() {
     setIsExportingVideo(true);
     setRecordingSecondsLeft(durationSec);
 
-    // Restart intro so recording captures the full reveal
+    // Restart intro so recording captures the full sequence
     handleReplayIntro();
 
     try {
-      const stream = canvas.captureStream(60);
-      let mimeType = 'video/webm;codecs=vp9';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm';
-      }
-
-      const recorder = new MediaRecorder(stream, {
-        mimeType,
-        videoBitsPerSecond: 8000000, // 8 Mbps high quality
+      const mp4Blob = await exportCanvasToMp4(canvas, {
+        durationSec,
+        fps: 60,
+        onProgress: (secondsLeft, pct) => {
+          setRecordingSecondsLeft(secondsLeft);
+          setExportProgress(pct);
+        },
+        registerStopHandler: (stopFn) => {
+          stopRecordingRef.current = stopFn;
+        },
       });
 
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
-      recorder.onstop = () => {
-        const videoBlob = new Blob(chunks, { type: mimeType });
-        const url = URL.createObjectURL(videoBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `git-neon-abertura-${settings.channelName.toLowerCase()}-${durationSec}s.webm`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        setIsExportingVideo(false);
-      };
-
-      recorder.start();
-
-      // Countdown interval for recording indicator
-      let left = durationSec;
-      const recTimer = setInterval(() => {
-        left--;
-        setRecordingSecondsLeft(left);
-        if (left <= 0) {
-          clearInterval(recTimer);
-          recorder.stop();
-        }
-      }, 1000);
+      const url = URL.createObjectURL(mp4Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const channelSlug = (settings.channelName || 'live').toLowerCase().replace(/\s+/g, '-');
+      const durationLabel = durationSec >= 60 ? `${Math.round(durationSec / 60)}min` : `${durationSec}s`;
+      a.download = `abertura-live-${channelSlug}-${durationLabel}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Error recording video:', err);
+      console.error('Error recording MP4 video:', err);
+    } finally {
       setIsExportingVideo(false);
+      setRecordingSecondsLeft(0);
+      setExportProgress(0);
+      stopRecordingRef.current = null;
     }
   };
 
@@ -208,7 +193,8 @@ export default function App() {
       const gifWidth = 640;
       const gifHeight = 360;
       const fps = 16;
-      const totalFrames = durationSec * fps;
+      const effectiveGifSec = Math.min(6, durationSec);
+      const totalFrames = effectiveGifSec * fps;
       const frameDelayMs = 1000 / fps;
 
       const frames: HTMLCanvasElement[] = [];
@@ -278,6 +264,7 @@ export default function App() {
           theme={activeTheme}
           settings={settings}
           introProgress={introProgress}
+          remainingSeconds={remainingSeconds}
           onCanvasReady={(c) => {
             canvasElementRef.current = c;
           }}
@@ -293,11 +280,26 @@ export default function App() {
 
         {/* Live Recording HUD overlay */}
         {isExportingVideo && (
-          <div className="absolute top-6 left-6 z-50 flex items-center gap-2.5 px-4 py-2 rounded-lg bg-red-950/90 border border-red-500/60 backdrop-blur-md shadow-2xl animate-pulse">
-            <div className="w-3 h-3 rounded-full bg-red-500" />
-            <span className="text-xs font-mono font-bold text-white tracking-widest uppercase">
-              GRAVANDO VÍDEO 60FPS: {recordingSecondsLeft}s
-            </span>
+          <div className="absolute top-6 left-6 z-50 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-slate-950/95 border border-red-500/70 backdrop-blur-md shadow-2xl">
+            <div className="w-3.5 h-3.5 rounded-full bg-red-500 animate-ping" />
+            <div className="flex flex-col">
+              <span className="text-xs font-mono font-bold text-white tracking-wider uppercase">
+                GRAVANDO VÍDEO MP4 60FPS: {Math.floor(recordingSecondsLeft / 60)}:{String(recordingSecondsLeft % 60).padStart(2, '0')} restantes ({exportProgress}%)
+              </span>
+              <div className="w-52 h-1.5 bg-slate-800 rounded-full mt-1.5 overflow-hidden">
+                <div
+                  className="h-full bg-red-500 transition-all duration-300"
+                  style={{ width: `${exportProgress}%` }}
+                />
+              </div>
+            </div>
+            <button
+              onClick={() => stopRecordingRef.current?.()}
+              className="ml-2 px-3 py-1 rounded bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+              title="Finalizar gravação agora e baixar arquivo MP4"
+            >
+              Finalizar & Baixar
+            </button>
           </div>
         )}
 
