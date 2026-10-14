@@ -1,0 +1,6 @@
+{
+  "name": "Git Neon Live Stream Intro",
+  "description": "Abertura animada para live stream com logotipo Git em neon vibrante, transições dinâmicas de câmera, partículas interativas, efeitos de pulsação e exportação para GIF/vídeo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
